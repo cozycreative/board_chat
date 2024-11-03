@@ -31,9 +31,13 @@ def main():
         'translations': TRANSLATIONS
     }
     
-    # Check if we're on admin page
+    # Check URL parameters
     params = dict(st.query_params)
-    if params.get("admin") == "true":
+    is_admin = params.get("admin") == "true"
+    is_anonymous = params.get("anon") == "true"
+    
+    # Show admin panel if requested
+    if is_admin:
         show_admin_panel(config)
         return
         
@@ -52,6 +56,14 @@ def main():
     translations = config['translations'][language]
     
     st.title(translations["title"])
+    
+    # Show anonymous mode indicator if active
+    if is_anonymous:
+        st.info(
+            "Anonymous Mode - Chat history will not be stored" if language == "English"
+            else "Анонимный режим - История чата не будет сохранена"
+        )
+    
     st.write(translations["instructions"])
     
     # Board member selection
@@ -121,8 +133,8 @@ def main():
             with st.chat_message("assistant"):
                 st.write(response)
             
-            # Log conversation to Firebase
-            if db:
+            # Log conversation to Firebase only if not in anonymous mode
+            if db and not is_anonymous:
                 log_conversation(
                     db,
                     st.session_state.user_id,
