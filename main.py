@@ -22,8 +22,14 @@ if 'language' not in st.session_state:
     st.session_state.language = "English"
 if 'custom_members' not in st.session_state:
     st.session_state.custom_members = []
+if 'scroll_to_chat' not in st.session_state:
+    st.session_state.scroll_to_chat = False
 
 def main():
+    # Force scroll to top on initial load
+    if not st.session_state.scroll_to_chat:
+        st.empty()
+    
     # Get dynamic configurations
     config = get_config(db) if db else {
         'board_members': DEFAULT_BOARD_MEMBERS,
@@ -31,133 +37,148 @@ def main():
         'translations': TRANSLATIONS
     }
     
-    # Check URL parameters
-    params = dict(st.query_params)
-    is_admin = params.get("admin") == "true"
-    is_anonymous = params.get("anon") == "true"
+    # Check URL parameters using st.query_params
+    params = st.query_params
+    is_admin = params.get("admin", "") == "true"
+    is_anonymous = params.get("anon", "") == "true"
     
     # Show admin panel if requested
     if is_admin:
         show_admin_panel(config)
         return
-        
-    # Language selection in upper right corner
-    col1, col2, col3 = st.columns([6, 1, 1])
-    with col2:
-        if st.button("EN", type="secondary", use_container_width=True):
-            st.session_state.language = "English"
-            st.rerun()
-    with col3:
-        if st.button("RU", type="secondary", use_container_width=True):
-            st.session_state.language = "Russian"
-            st.rerun()
-            
-    language = st.session_state.language
-    translations = config['translations'][language]
     
-    st.title(translations["title"])
-    
-    # Show anonymous mode indicator if active
-    if is_anonymous:
-        st.info(
-            "Anonymous Mode - Chat history will not be stored" if language == "English"
-            else "Анонимный режим - История чата не будет сохранена"
-        )
-    
-    st.write(translations["instructions"])
-    
-    # Board member selection
-    all_members = config['board_members'] + st.session_state.custom_members
-    selected_members = st.multiselect(
-        translations["board_members_label"],
-        options=all_members,
-        default=all_members  # Show all members by default
-    )
-    
-    # Add custom board member (aligned input and button)
+    # Top section container
     with st.container():
-        col1, col2 = st.columns([4, 1])
-        with col1:
-            new_member = st.text_input(
-                "Add Custom Member" if language == "English" else "Добавить Участника",
-                key="new_member",
-                label_visibility="collapsed"  # Hide label to align with button
-            )
+        # Language selection in upper right corner
+        col1, col2, col3 = st.columns([6, 1, 1])
         with col2:
-            add_clicked = st.button(
-                "Add" if language == "English" else "Добавить",
-                type="secondary",
-                use_container_width=True
-            )
-            if add_clicked:
-                if new_member and new_member not in all_members and len(all_members) < 12:
-                    st.session_state.custom_members.append(new_member)
-                    st.rerun()
-                elif len(all_members) >= 12:
-                    st.warning(
-                        "Maximum 12 board members allowed." if language == "English"
-                        else "Максимально допустимо 12 участников совета."
-                    )
-    
-    # Display chat history
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.write(message["content"])
-    
-    # Chat input
-    if selected_members:
-        user_input = st.chat_input(translations["chat_placeholder"])
+            if st.button("EN", type="secondary", use_container_width=True):
+                st.session_state.language = "English"
+                st.rerun()
+        with col3:
+            if st.button("RU", type="secondary", use_container_width=True):
+                st.session_state.language = "Russian"
+                st.rerun()
+                
+        language = st.session_state.language
+        translations = config['translations'][language]
         
-        if user_input:
-            # Add user message to chat immediately
-            st.session_state.messages.append({"role": "user", "content": user_input})
-            
-            # Show the user's message
-            with st.chat_message("user"):
-                st.write(user_input)
-            
-            # Show loading spinner while getting response
-            with st.spinner('Getting response...' if language == "English" else 'Получение ответа...'):
-                # Get AI response using dynamic system prompts
-                response = get_chat_response(
-                    st.session_state.messages,
-                    selected_members,
-                    language,
-                    config['system_prompts']
-                )
-            
-            # Add AI response to chat
-            st.session_state.messages.append({"role": "assistant", "content": response})
-            
-            # Show AI response
-            with st.chat_message("assistant"):
-                st.write(response)
-            
-            # Log conversation to Firebase only if not in anonymous mode
-            if db and not is_anonymous:
-                log_conversation(
-                    db,
-                    st.session_state.user_id,
-                    st.session_state.messages,
-                    selected_members,
-                    language
-                )
-            
-            # Rerun to update chat display
-            st.rerun()
-    else:
-        st.warning(
-            "Please select at least one board member to begin." if language == "English"
-            else "Пожалуйста, выберите хотя бы одного члена совета, чтобы начать."
-        )
+        st.title(translations["title"])
+        
+        # Show anonymous mode indicator if active
+        if is_anonymous:
+            st.info(
+                "Anonymous Mode - Chat history will not be stored" if language == "English"
+                else "Анонимный режим - История чата не будет сохранена",
+                icon="🔒"
+            )
+        
+        # Instructions always visible
+        st.write(translations["instructions"])
     
-    # Clear chat button (below chat)
-    if st.button("New Chat" if language == "English" else "Новый Чат", type="secondary"):
-        # Generate new user_id for the new chat session
-        st.session_state.user_id = generate_user_id()
-        # Clear only the local messages
-        st.session_state.messages = []
-        st.rerun()
+    # Board member selection container
+    with st.container():
+        # Board member selection
+        all_members = config['board_members'] + st.session_state.custom_members
+        selected_members = st.multiselect(
+            translations["board_members_label"],
+            options=all_members,
+            default=all_members  # Show all members by default
+        )
+        
+        # Add custom board member (aligned input and button)
+        with st.container():
+            col1, col2 = st.columns([4, 1])
+            with col1:
+                new_member = st.text_input(
+                    "Add Custom Member" if language == "English" else "Добавить Участника",
+                    key="new_member",
+                    label_visibility="collapsed"  # Hide label to align with button
+                )
+            with col2:
+                add_clicked = st.button(
+                    "Add Member" if language == "English" else "Добавить Участника",
+                    type="secondary",
+                    use_container_width=True
+                )
+                if add_clicked:
+                    if new_member and new_member not in all_members and len(all_members) < 12:
+                        st.session_state.custom_members.append(new_member)
+                        st.rerun()
+                    elif len(all_members) >= 12:
+                        st.warning(
+                            "Maximum 12 board members allowed." if language == "English"
+                            else "Максимально допустимо 12 участников совета."
+                        )
+    
+    # Chat container
+    chat_container = st.container()
+    
+    with chat_container:
+        # Display chat history
+        for message in st.session_state.messages:
+            with st.chat_message(message["role"]):
+                st.write(message["content"])
+        
+        # Chat input
+        if selected_members:
+            user_input = st.chat_input(translations["chat_placeholder"])
+            
+            if user_input:
+                # Set flag to scroll to chat
+                st.session_state.scroll_to_chat = True
+                
+                # Add user message to chat immediately
+                st.session_state.messages.append({"role": "user", "content": user_input})
+                
+                # Show the user's message
+                with st.chat_message("user"):
+                    st.write(user_input)
+                
+                # Show loading spinner while getting response
+                with st.spinner('Getting response...' if language == "English" else 'Получение ответа...'):
+                    # Get AI response using dynamic system prompts
+                    response = get_chat_response(
+                        st.session_state.messages,
+                        selected_members,
+                        language,
+                        config['system_prompts']
+                    )
+                
+                # Add AI response to chat
+                st.session_state.messages.append({"role": "assistant", "content": response})
+                
+                # Show AI response
+                with st.chat_message("assistant"):
+                    st.write(response)
+                
+                # Log conversation to Firebase only if not in anonymous mode
+                if db and not is_anonymous:
+                    log_conversation(
+                        db,
+                        st.session_state.user_id,
+                        st.session_state.messages,
+                        selected_members,
+                        language
+                    )
+                
+                # Rerun to update chat display
+                st.rerun()
+        else:
+            st.warning(
+                "Please select at least one board member to begin." if language == "English"
+                else "Пожалуйста, выберите хотя бы одного члена совета, чтобы начать."
+            )
+        
+        # Clear chat button (below chat)
+        if st.button("New Chat" if language == "English" else "Новый Чат", type="secondary"):
+            # Generate new user_id for the new chat session
+            st.session_state.user_id = generate_user_id()
+            # Clear only the local messages
+            st.session_state.messages = []
+            # Reset scroll flag
+            st.session_state.scroll_to_chat = False
+            st.rerun()
 
 def show_admin_panel(config):
     """Display enhanced admin panel with configuration management"""
