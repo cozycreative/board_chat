@@ -9,8 +9,8 @@ OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 # Model configuration
 MODEL_CONFIG = {
-    "model": "openai/gpt-4o-mini",
-    "temperature": 0.7
+    "model": "openai/gpt-4o-2024-11-20",
+    "temperature": 1
 }
 
 # System prompts for different languages
