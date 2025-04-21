@@ -7,7 +7,7 @@ redirect_url = "https://www.stratboard.chat/"
 # HTML/JavaScript for redirection
 redirect_script = f"""
     <script type="text/javascript">
-        window.top.location.href = "{redirect_url}";
+        window.location.href = "{redirect_url}";
     </script>
     <p>Redirecting to <a href="{redirect_url}">{redirect_url}</a>...</p>
 """
